@@ -1,0 +1,11 @@
+{
+  "name": "roblox-monitor",
+  "version": "1.0.0",
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
