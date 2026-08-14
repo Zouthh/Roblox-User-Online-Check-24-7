@@ -192,19 +192,29 @@ async function getGameIcon(placeId) {
   }
 }
 
-// Busca el server exacto (gameId) en la lista pública de servers del place, para sacar jugadores actuales
+// Busca el server exacto (gameId) en la lista pública de servers del place, paginando varias páginas
 async function getServerPlayerCount(placeId, gameId) {
   if (!placeId || !gameId) return null;
   try {
-    const res = await fetch(
-      `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Asc&limit=100`,
-      { headers: { "User-Agent": "Mozilla/5.0" } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const server = (data.data || []).find((s) => s.id === gameId);
-    if (!server) return { found: false }; // probablemente server privado/no listado
-    return { found: true, playing: server.playing, maxPlayers: server.maxPlayers };
+    let cursor = "";
+    const maxPages = 5; // solo pa' sacar el dato extra de "jugadores en su server", nada más
+
+    for (let page = 0; page < maxPages; page++) {
+      const url = `https://games.roblox.com/v1/games/${placeId}/servers/Public?sortOrder=Asc&limit=100${cursor ? `&cursor=${cursor}` : ""}`;
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const server = (data.data || []).find((s) => s.id === gameId);
+      if (server) return { found: true, playing: server.playing, maxPlayers: server.maxPlayers };
+
+      if (!data.nextPageCursor) break; // ya no hay más páginas
+      cursor = data.nextPageCursor;
+    }
+
+    // No lo encontramos tras revisar varias páginas: puede ser privado, o simplemente
+    // un juego con muchísimos servers activos donde no alcanzamos a cubrir todo.
+    return { found: false, inconclusive: true };
   } catch (err) {
     console.error("Fallo sacando info del server:", err.message);
     return null;
@@ -282,9 +292,9 @@ async function checkWatchedPlayers() {
         let serverField = null;
         if (serverInfo && serverInfo.found) {
           serverField = { name: "Jugadores en su server", value: `${serverInfo.playing}/${serverInfo.maxPlayers}`, inline: true };
-        } else if (serverInfo && serverInfo.found === false) {
-          serverField = { name: "Server", value: "🔒 Privado / no listado públicamente", inline: true };
         }
+        // Nota: si no lo encontramos, no significa que no se pueda unir — el botón/link de
+        // "Unirse a su server" funciona vía join-by-presence, independiente de este dato extra.
 
         const embed = {
           color: 0x57f287,
