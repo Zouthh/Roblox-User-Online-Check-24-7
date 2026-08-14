@@ -101,8 +101,8 @@ async function loadUserInfo() {
 
 function formatPlayer(userId) {
   const info = userInfoCache.get(userId);
-  if (!info) return `ID ${userId}`;
-  return `${info.displayName} (@${info.name}, ID ${userId})`;
+  if (!info) return `[ID ${userId}](https://www.roblox.com/users/${userId}/profile)`;
+  return `[${info.displayName} (@${info.name})](https://www.roblox.com/users/${userId}/profile) — ID ${userId}`;
 }
 
 function formatAccountAge(createdIso) {
@@ -150,16 +150,13 @@ function bumpDailyConnectCount(userId) {
 function buildJoinLinks(presence) {
   const links = [];
   if (presence.placeId) {
-    links.push({ label: "Página del juego", url: `https://www.roblox.com/games/${presence.placeId}` });
+    links.push(`[Página del juego](https://www.roblox.com/games/${presence.placeId})`);
   }
   // Deep link: abre el cliente de Roblox directo en ESE server (si su privacidad lo permite)
   if (presence.placeId && presence.gameId) {
-    links.push({
-      label: "Unirse a su server",
-      url: `https://www.roblox.com/games/start?placeId=${presence.placeId}&gameInstanceId=${presence.gameId}`,
-    });
+    links.push(`[Unirse a su server](https://www.roblox.com/games/start?placeId=${presence.placeId}&gameInstanceId=${presence.gameId})`);
   }
-  return links;
+  return links.length ? links.join(" · ") : "";
 }
 
 // Cache de placeId -> { universeId, iconUrl } para no repetir la búsqueda cada vez
@@ -221,8 +218,8 @@ async function getServerPlayerCount(placeId, gameId) {
   }
 }
 
-// ====== UTIL: mandar alerta a Discord (con embed y botones opcionales) ======
-async function alert(message, embed = null, buttons = null) {
+// ====== UTIL: mandar alerta a Discord (con embed opcional) ======
+async function alert(message, embed = null) {
   console.log(`[ALERTA] ${new Date().toISOString()} - ${message}`);
   if (!CONFIG.discordWebhook) return;
   try {
@@ -231,19 +228,6 @@ async function alert(message, embed = null, buttons = null) {
       allowed_mentions: { parse: ["everyone"] },
     };
     if (embed) body.embeds = [embed];
-    if (buttons && buttons.length) {
-      body.components = [
-        {
-          type: 1, // action row
-          components: buttons.map((b) => ({
-            type: 2, // button
-            style: 5, // link style (no requiere manejar interacciones)
-            label: b.label,
-            url: b.url,
-          })),
-        },
-      ];
-    }
 
     await fetch(CONFIG.discordWebhook, {
       method: "POST",
@@ -281,7 +265,7 @@ async function checkWatchedPlayers() {
         connectTimestamps.set(userId, Date.now());
         const connectCount = bumpDailyConnectCount(userId);
         const emoji = guessEmoji(gameName);
-        const buttons = buildJoinLinks(presence);
+        const links = buildJoinLinks(presence);
         const info = userInfoCache.get(userId) || {};
 
         const [gameIconUrl, serverInfo] = await Promise.all([
@@ -315,9 +299,8 @@ async function checkWatchedPlayers() {
         };
 
         await alert(
-          `${emoji} ${formatPlayer(userId)} se conectó a jugar: ${gameName}`,
-          embed,
-          buttons
+          `${emoji} ${formatPlayer(userId)} se conectó a jugar: ${gameName}${links ? `\n${links}` : ""}`,
+          embed
         );
       } else if (!isInGame && wasInGame) {
         const connectedAt = connectTimestamps.get(userId);
